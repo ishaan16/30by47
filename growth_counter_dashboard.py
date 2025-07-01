@@ -100,7 +100,7 @@ if current > 0 and target > 0 and time > 0:
         st.markdown("---")
         st.header(":money_with_wings: Per Capita GDP Comparison")
 
-        # Fetch India's population (latest)
+        # Fetch India's population (latest) from World Bank
         def fetch_india_population():
             url = "https://api.worldbank.org/v2/country/IN/indicator/SP.POP.TOTL?format=json&per_page=2"
             try:
@@ -110,19 +110,43 @@ if current > 0 and target > 0 and time > 0:
                     if isinstance(data, list) and len(data) > 1 and data[1]:
                         for entry in data[1]:
                             if entry.get("value") is not None:
-                                return float(entry["value"]), entry.get("date")
+                                return float(entry["value"]), int(entry.get("date"))
             except Exception as e:
                 st.warning(f"Could not fetch India's population: {e}")
             return None, None
 
+        def project_population(base_pop, base_year, target_year):
+            """Project India's population for a given year using UN growth rates"""
+            def get_growth_rate(year):
+                if year <= 2025:
+                    return 0.010  # 1.0%
+                elif year <= 2030:
+                    return 0.008  # 0.8%
+                elif year <= 2040:
+                    return 0.005  # 0.5%
+                else:
+                    return 0.003  # 0.3%
+            years_diff = target_year - base_year
+            pop = base_pop
+            for y in range(base_year + 1, target_year + 1):
+                pop *= (1 + get_growth_rate(y))
+            return pop
+
         india_pop, india_pop_year = fetch_india_population()
+        projected_pop = None
+        if india_pop and india_pop_year and target_year > india_pop_year:
+            projected_pop = project_population(india_pop, india_pop_year, target_year)
+
         if india_pop:
             current_per_capita = current / india_pop
-            projected_per_capita = target / india_pop
+            # Use projected population if available, otherwise use current population
+            population_for_projection = projected_pop if projected_pop else india_pop
+            projected_per_capita = target / population_for_projection
+            
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown(
-                    "<b>Current Per Capita GDP (India, {year}):</b>".format(year=india_pop_year),
+                    f"<b>Current Per Capita GDP (India, {india_pop_year}):</b>",
                     unsafe_allow_html=True,
                 )
                 st.markdown(
@@ -136,6 +160,41 @@ if current > 0 and target > 0 and time > 0:
                 )
                 st.markdown(
                     f"<div style='font-size:2.5em; font-weight:bold; color:#2ca02c;'>$ {projected_per_capita:,.2f}</div>",
+                    unsafe_allow_html=True,
+                )
+            
+            # Display population information
+            if projected_pop:
+                st.markdown("---")
+                st.header(":busts_in_silhouette: Population Projections")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(f"<b>Current Population ({india_pop_year}):</b>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div style='font-size:1.5em; font-weight:bold; color:#1f77b4;'>{india_pop:,.0f}</div>",
+                        unsafe_allow_html=True,
+                    )
+                with col2:
+                    st.markdown(f"<b>Projected Population ({target_year}):</b>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div style='font-size:1.5em; font-weight:bold; color:#2ca02c;'>{projected_pop:,.0f}</div>",
+                        unsafe_allow_html=True,
+                    )
+                # Calculate population growth
+                pop_growth = ((projected_pop - india_pop) / india_pop) * 100
+                # Format growth rate
+                if pop_growth > 0:
+                    growth_color = "green"
+                    growth_sign = "+"
+                elif pop_growth < 0:
+                    growth_color = "red"
+                    growth_sign = ""
+                else:
+                    growth_color = "gray"
+                    growth_sign = ""
+                st.markdown(
+                    f"<br/><b>Population Growth ({india_pop_year} to {target_year}):</b> "
+                    f"<div style='font-size:2.5em; font-weight:bold; color:{growth_color}; display:inline-block;'>{growth_sign}{pop_growth:.2f}%</div>",
                     unsafe_allow_html=True,
                 )
 
