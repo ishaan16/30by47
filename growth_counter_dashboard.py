@@ -1,8 +1,12 @@
-import streamlit as st
-import math
-import requests
 from datetime import datetime
+
 import pandas as pd
+import streamlit as st
+
+from utils import (calculate_required_growth, fetch_india_dependency_ratio,
+                   fetch_india_median_age, fetch_india_population,
+                   fetch_latest_gdp_growth, get_india_gdp_usd,
+                   project_median_age_evidence_based, project_population)
 
 st.title("Required GDP Growth Calculator")
 
@@ -11,24 +15,6 @@ st.write(
 This app calculates the per annum growth required to reach India's target GDP value over a specified number of years.
 """
 )
-
-
-def get_india_gdp_usd():
-    # World Bank API for India's GDP (NY.GDP.MKTP.CD) in USD, most recent year
-    url = "https://api.worldbank.org/v2/country/IN/indicator/NY.GDP.MKTP.CD?format=json&per_page=1"
-    try:
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            if isinstance(data, list) and len(data) > 1 and data[1]:
-                gdp = data[1][0].get("value")
-                if gdp:
-                    return float(gdp)
-    except Exception as e:
-        st.warning(f"Could not fetch latest GDP value: {e}")
-    # Fallback to IMF/StatisticsTimes.com 2025 estimate
-    return 10000.0  # 4271920000000.0
-
 
 current_gdp = get_india_gdp_usd()
 
@@ -48,39 +34,29 @@ target_billion = st.number_input(
 current = current_billion * 1e9
 target = target_billion * 1e9
 
-
 current_year = datetime.now().year
 target_year = st.number_input("Target year", min_value=current_year + 1, value=2047, step=1)
 time = target_year - current_year
 
 if current > 0 and target > 0 and time > 0:
     try:
-        growth = 100 * (10 ** (math.log10(target / current) / time) - 1)
+        growth = calculate_required_growth(current, target, time)
 
         # Fetch latest GDP growth rate of India
-        def fetch_latest_gdp_growth():
-            url = "https://api.worldbank.org/v2/country/IN/indicator/NY.GDP.MKTP.KD.ZG?format=json&per_page=2"
-            try:
-                resp = requests.get(url, timeout=5)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    if isinstance(data, list) and len(data) > 1 and data[1]:
-                        for entry in data[1]:
-                            if entry.get("value") is not None:
-                                return float(entry["value"]), entry.get("date")
-            except Exception as e:
-                st.warning(f"Could not fetch latest GDP growth rate: {e}")
-            return None, None
-
         latest_growth, latest_year = fetch_latest_gdp_growth()
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("<b>Required Per Annum Growth (%)</b>", unsafe_allow_html=True)
-            st.markdown(
-                f"<span style='font-size:2em;'><b>{growth:.2f}%</b></span>", unsafe_allow_html=True
-            )
+            if growth is not None:
+                st.markdown(
+                    f"<span style='font-size:2em;'><b>{growth:.2f}%</b></span>", unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    f"<span style='font-size:2em; color:red;'><b>Error</b></span>", unsafe_allow_html=True
+                )
         with col2:
-            if latest_growth is not None:
+            if latest_growth is not None and growth is not None:
                 color = "green" if latest_growth >= growth else "red"
                 st.markdown(
                     f"<b>Latest GDP Growth Rate ({latest_year})</b>", unsafe_allow_html=True
@@ -101,37 +77,6 @@ if current > 0 and target > 0 and time > 0:
         st.header(":money_with_wings: Per Capita GDP Comparison")
 
         # Fetch India's population (latest) from World Bank
-        def fetch_india_population():
-            url = "https://api.worldbank.org/v2/country/IN/indicator/SP.POP.TOTL?format=json&per_page=2"
-            try:
-                resp = requests.get(url, timeout=5)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    if isinstance(data, list) and len(data) > 1 and data[1]:
-                        for entry in data[1]:
-                            if entry.get("value") is not None:
-                                return float(entry["value"]), int(entry.get("date"))
-            except Exception as e:
-                st.warning(f"Could not fetch India's population: {e}")
-            return None, None
-
-        def project_population(base_pop, base_year, target_year):
-            """Project India's population for a given year using UN growth rates"""
-            def get_growth_rate(year):
-                if year <= 2025:
-                    return 0.010  # 1.0%
-                elif year <= 2030:
-                    return 0.008  # 0.8%
-                elif year <= 2040:
-                    return 0.005  # 0.5%
-                else:
-                    return 0.003  # 0.3%
-            years_diff = target_year - base_year
-            pop = base_pop
-            for y in range(base_year + 1, target_year + 1):
-                pop *= (1 + get_growth_rate(y))
-            return pop
-
         india_pop, india_pop_year = fetch_india_population()
         projected_pop = None
         if india_pop and india_pop_year and target_year > india_pop_year:
@@ -162,41 +107,6 @@ if current > 0 and target > 0 and time > 0:
                     f"<div style='font-size:2.5em; font-weight:bold; color:#2ca02c;'>$ {projected_per_capita:,.2f}</div>",
                     unsafe_allow_html=True,
                 )
-            
-            # Display population information
-            if projected_pop:
-                st.markdown("---")
-                st.header(":busts_in_silhouette: Population Projections")
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown(f"<b>Current Population ({india_pop_year}):</b>", unsafe_allow_html=True)
-                    st.markdown(
-                        f"<div style='font-size:1.5em; font-weight:bold; color:#1f77b4;'>{india_pop:,.0f}</div>",
-                        unsafe_allow_html=True,
-                    )
-                with col2:
-                    st.markdown(f"<b>Projected Population ({target_year}):</b>", unsafe_allow_html=True)
-                    st.markdown(
-                        f"<div style='font-size:1.5em; font-weight:bold; color:#2ca02c;'>{projected_pop:,.0f}</div>",
-                        unsafe_allow_html=True,
-                    )
-                # Calculate population growth
-                pop_growth = ((projected_pop - india_pop) / india_pop) * 100
-                # Format growth rate
-                if pop_growth > 0:
-                    growth_color = "green"
-                    growth_sign = "+"
-                elif pop_growth < 0:
-                    growth_color = "red"
-                    growth_sign = ""
-                else:
-                    growth_color = "gray"
-                    growth_sign = ""
-                st.markdown(
-                    f"<br/><b>Population Growth ({india_pop_year} to {target_year}):</b> "
-                    f"<div style='font-size:2.5em; font-weight:bold; color:{growth_color}; display:inline-block;'>{growth_sign}{pop_growth:.2f}%</div>",
-                    unsafe_allow_html=True,
-                )
 
             # Use local CSV for per capita GDP comparison
             try:
@@ -213,7 +123,7 @@ if current > 0 and target > 0 and time > 0:
                     .argsort()[:5]
                 ]
                 st.markdown(
-                    f"<br/><b>5 Countries with most similar per capita GDP to India's projected ({target_year}):</b>",
+                    f"<br/><b>Countries with current GDP per capita closest to India's projected GDP per capita in {target_year}:</b>",
                     unsafe_allow_html=True,
                 )
                 st.markdown(
@@ -231,6 +141,142 @@ if current > 0 and target > 0 and time > 0:
                 st.warning(f"Could not read per capita GDP CSV: {e}")
         else:
             st.warning("Could not fetch India's population for per capita GDP calculation.")
+
+        # --- Demographic Information Section ---
+        if india_pop and projected_pop:
+            st.markdown("---")
+            st.header(":busts_in_silhouette: Demographic Information")
+            
+            # Fetch demographic data
+            median_age, median_age_year = fetch_india_median_age()
+            dependency_ratio, dep_ratio_year = fetch_india_dependency_ratio()
+            
+            # Current demographic information
+            st.markdown("<br/>", unsafe_allow_html=True)
+            st.subheader(":calendar: Current Demographics")
+            st.markdown("<br/>", unsafe_allow_html=True)
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.markdown(f"<b>Population ({india_pop_year}):</b>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<div style='font-size:1.5em; font-weight:bold; color:#1f77b4;'>{india_pop:,.0f}</div>",
+                    unsafe_allow_html=True,
+                )
+            with col2:
+                if median_age:
+                    st.markdown(f"<b>Median Age ({median_age_year}):</b>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div style='font-size:1.5em; font-weight:bold; color:#ff7f0e;'>{median_age:.1f} years</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown("<b>Median Age:</b>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div style='font-size:1.5em; font-weight:bold; color:gray;'>N/A</div>",
+                        unsafe_allow_html=True,
+                    )
+            with col3:
+                if dependency_ratio:
+                    st.markdown(f"<b>Dependency Ratio ({dep_ratio_year}):</b>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div style='font-size:1.5em; font-weight:bold; color:#9467bd;'>{dependency_ratio:.1f}%</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown("<b>Dependency Ratio:</b>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div style='font-size:1.5em; font-weight:bold; color:gray;'>N/A</div>",
+                        unsafe_allow_html=True,
+                    )
+            
+            # Population category and dependency level
+            st.markdown("<br/>", unsafe_allow_html=True)
+            if median_age or dependency_ratio:
+                col1, col2 = st.columns(2)
+                with col1:
+                    if median_age:
+                        # Calculate age category
+                        if median_age < 30:
+                            age_category = "Young Population"
+                            category_color = "#2ca02c"
+                        elif median_age < 40:
+                            age_category = "Middle-aged Population"
+                            category_color = "#ff7f0e"
+                        else:
+                            age_category = "Aging Population"
+                            category_color = "#d62728"
+                        
+                        st.markdown("<b>Population Category:</b>", unsafe_allow_html=True)
+                        st.markdown(
+                            f"<div style='font-size:1.5em; font-weight:bold; color:{category_color};'>{age_category}</div>",
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown("<b>Population Category:</b>", unsafe_allow_html=True)
+                        st.markdown(
+                            f"<div style='font-size:1.5em; font-weight:bold; color:gray;'>N/A</div>",
+                            unsafe_allow_html=True,
+                        )
+                with col2:
+                    if dependency_ratio:
+                        # Interpret dependency ratio
+                        if dependency_ratio < 50:
+                            dep_category = "Low Dependency"
+                            dep_color = "#2ca02c"
+                        elif dependency_ratio < 70:
+                            dep_category = "Moderate Dependency"
+                            dep_color = "#ff7f0e"
+                        else:
+                            dep_category = "High Dependency"
+                            dep_color = "#d62728"
+                        
+                        st.markdown("<b>Dependency Level:</b>", unsafe_allow_html=True)
+                        st.markdown(
+                            f"<div style='font-size:1.5em; font-weight:bold; color:{dep_color};'>{dep_category}</div>",
+                            unsafe_allow_html=True,
+                        )
+            
+
+                    else:
+                        st.markdown("<b>Dependency Level:</b>", unsafe_allow_html=True)
+                        st.markdown(
+                            f"<div style='font-size:1.5em; font-weight:bold; color:gray;'>N/A</div>",
+                            unsafe_allow_html=True,
+                        )
+            
+            # Projected demographic information
+            st.markdown("<br/>", unsafe_allow_html=True)
+            st.markdown("---")
+            st.markdown("<br/>", unsafe_allow_html=True)
+            st.subheader(":chart_with_upwards_trend: Projected Demographics")
+            st.markdown("<br/>", unsafe_allow_html=True)
+            
+            # Calculate projected median age if current age is available
+            projected_median_age = None
+            if median_age and median_age_year:
+                projected_median_age = project_median_age_evidence_based(median_age, median_age_year, target_year)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"<b>Projected Population ({target_year}):</b>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<div style='font-size:1.5em; font-weight:bold; color:#2ca02c;'>{projected_pop:,.0f}</div>",
+                    unsafe_allow_html=True,
+                )
+            with col2:
+                st.markdown(f"<b>Projected Median Age ({target_year}):</b>", unsafe_allow_html=True)
+                if projected_median_age:
+                    st.markdown(
+                        f"<div style='font-size:1.5em; font-weight:bold; color:#ff7f0e;'>{projected_median_age:.1f} years</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown(
+                        f"<div style='font-size:1.5em; font-weight:bold; color:gray;'>N/A</div>",
+                        unsafe_allow_html=True,
+                    )
+            
+
     except Exception as e:
         st.error(f"Error in calculation: {e}")
 else:
