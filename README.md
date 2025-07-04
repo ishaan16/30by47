@@ -36,8 +36,6 @@ thirtybyfortyseven/
 ├── utils.py                       # Utility functions and API calls
 ├── requirements.txt               # Python dependencies
 ├── gdp-per-capita-by-country-2025.csv  # Country comparison data
-├── test_population_apis.py        # API testing script
-├── test_population.xlsx           # Population test data
 └── README.md                      # This file
 ```
 
