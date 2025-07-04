@@ -7,7 +7,10 @@ from utils import (calculate_required_growth, fetch_india_dependency_ratio,
                    fetch_india_median_age, fetch_india_population,
                    fetch_india_sector_gdp, fetch_latest_gdp_growth,
                    get_india_gdp_usd, project_median_age_evidence_based,
-                   project_population)
+                   project_population, fetch_sector_growth_projections,
+                   get_sector_growth_insights, fetch_country_sector_gdp,
+                   get_country_code)
+from plotting_utils import create_sector_sunburst_chart, get_sector_data, create_projected_sector_pie_chart, create_comparison_country_pie_chart
 
 st.title("Required GDP Growth Calculator")
 
@@ -147,116 +150,100 @@ if current > 0 and target > 0 and time > 0:
         st.markdown("---")
         st.header(":factory: Sector-wise GDP Analysis")
         
-        # Fetch sector-wise GDP data
-        sector_data = fetch_india_sector_gdp()
-        
-        if sector_data:
-            st.markdown("<br/>", unsafe_allow_html=True)
-            st.subheader(":chart_with_upwards_trend: Current Sector Distribution")
-            st.markdown("<br/>", unsafe_allow_html=True)
-            
-            # Display current sector distribution
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                if 'agriculture' in sector_data:
-                    st.markdown(f"<b>Agriculture ({sector_data['agriculture']['year']}):</b>", unsafe_allow_html=True)
-                    st.markdown(
-                        f"<div style='font-size:1.5em; font-weight:bold; color:#8B4513;'>{sector_data['agriculture']['percentage']:.1f}%</div>",
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    st.markdown("<b>Agriculture:</b>", unsafe_allow_html=True)
-                    st.markdown(
-                        f"<div style='font-size:1.5em; font-weight:bold; color:gray;'>N/A</div>",
-                        unsafe_allow_html=True,
-                    )
-            
-            with col2:
-                if 'manufacturing' in sector_data:
-                    st.markdown(f"<b>Manufacturing ({sector_data['manufacturing']['year']}):</b>", unsafe_allow_html=True)
-                    st.markdown(
-                        f"<div style='font-size:1.5em; font-weight:bold; color:#4169E1;'>{sector_data['manufacturing']['percentage']:.1f}%</div>",
-                        unsafe_allow_html=True,
-                    )
-                elif 'industry' in sector_data:
-                    st.markdown(f"<b>Industry ({sector_data['industry']['year']}):</b>", unsafe_allow_html=True)
-                    st.markdown(
-                        f"<div style='font-size:1.5em; font-weight:bold; color:#4169E1;'>{sector_data['industry']['percentage']:.1f}%</div>",
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    st.markdown("<b>Manufacturing:</b>", unsafe_allow_html=True)
-                    st.markdown(
-                        f"<div style='font-size:1.5em; font-weight:bold; color:gray;'>N/A</div>",
-                        unsafe_allow_html=True,
-                    )
-            
-            with col3:
-                if 'services' in sector_data:
-                    st.markdown(f"<b>Services ({sector_data['services']['year']}):</b>", unsafe_allow_html=True)
-                    st.markdown(
-                        f"<div style='font-size:1.5em; font-weight:bold; color:#32CD32;'>{sector_data['services']['percentage']:.1f}%</div>",
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    st.markdown("<b>Services:</b>", unsafe_allow_html=True)
-                    st.markdown(
-                        f"<div style='font-size:1.5em; font-weight:bold; color:gray;'>N/A</div>",
-                        unsafe_allow_html=True,
-                    )
-            
-            # Calculate total to ensure it adds up to ~100%
-            total_percentage = sum(sector['percentage'] for sector in sector_data.values())
-            if total_percentage > 0:
-                st.markdown("<br/>", unsafe_allow_html=True)
-                st.markdown(f"<b>Total Sector Share: {total_percentage:.1f}%</b>", unsafe_allow_html=True)
-                
-                if total_percentage < 95 or total_percentage > 105:
-                    st.info("Note: Sector percentages may not sum to 100% due to data availability and methodology differences.")
-            
-            # Sector analysis and insights
-            st.markdown("<br/>", unsafe_allow_html=True)
-            st.subheader(":bulb: Sector Analysis")
-            
-            # Provide insights based on current sector distribution
-            if 'agriculture' in sector_data and 'manufacturing' in sector_data and 'services' in sector_data:
-                agri_share = sector_data['agriculture']['percentage']
-                mfg_share = sector_data['manufacturing']['percentage']
-                services_share = sector_data['services']['percentage']
-                
-                insights = []
-                
-                # Agriculture insights
-                if agri_share > 20:
-                    insights.append("🔸 **High Agriculture Dependence**: India still has a significant agricultural sector, typical of developing economies.")
-                elif agri_share < 10:
-                    insights.append("🔸 **Low Agriculture Share**: India has transitioned to a more industrialized economy.")
-                else:
-                    insights.append("🔸 **Moderate Agriculture**: Balanced agricultural sector typical of emerging economies.")
-                
-                # Manufacturing insights
-                if mfg_share < 15:
-                    insights.append("🔸 **Manufacturing Gap**: Manufacturing share is below the target of 25% for economic development.")
-                elif mfg_share > 25:
-                    insights.append("🔸 **Strong Manufacturing**: Manufacturing sector is well-developed and competitive.")
-                else:
-                    insights.append("🔸 **Growing Manufacturing**: Manufacturing sector shows positive development trends.")
-                
-                # Services insights
-                if services_share > 60:
-                    insights.append("🔸 **Service-Dominated Economy**: Services sector dominates, indicating advanced economic structure.")
-                elif services_share < 40:
-                    insights.append("🔸 **Developing Services**: Services sector has room for growth and modernization.")
-                else:
-                    insights.append("🔸 **Balanced Services**: Services sector shows healthy development.")
-                
-                # Display insights
-                for insight in insights:
-                    st.markdown(f"<div style='font-size:1.1em; margin: 5px 0;'>{insight}</div>", unsafe_allow_html=True)
-        
+        # Current sector distribution (sunburst chart)
+        fig_current = create_sector_sunburst_chart()
+        if fig_current:
+            st.plotly_chart(fig_current, use_container_width=True)
         else:
-            st.warning("Could not fetch sector-wise GDP data.")
+            st.warning("Could not fetch current sector data.")
+        
+        st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)  # Small vertical gap
+        
+        # Projected sector distribution (pie chart)
+        with st.spinner("Fetching sector growth projections..."):
+            projections = fetch_sector_growth_projections(target_year)
+        if projections:
+            fig_projected = create_projected_sector_pie_chart(projections, target_year)
+            if fig_projected:
+                st.plotly_chart(fig_projected, use_container_width=True)
+            else:
+                st.warning("Could not create projected sector chart.")
+        else:
+            st.warning("Could not fetch sector growth projections.")
+        
+        # --- Comparison Countries Section ---
+        st.markdown("<br/>", unsafe_allow_html=True)
+        st.subheader(":globe_with_meridians: International Sector Comparison")
+        
+        # Get the closest 5 countries from the per capita comparison
+        try:
+            df = pd.read_csv("gdp-per-capita-by-country-2025.csv")
+            df = df.dropna(subset=["GDPPerCapita_GDPPerCapitaViaIMF_usd_2025"])
+            df["GDPPerCapita_GDPPerCapitaViaIMF_usd_2025"] = (
+                df["GDPPerCapita_GDPPerCapitaViaIMF_usd_2025"]
+                .replace("[\$,]", "", regex=True)
+                .astype(float)
+            )
+            closest_5 = df.iloc[
+                (df["GDPPerCapita_GDPPerCapitaViaIMF_usd_2025"] - projected_per_capita)
+                .abs()
+                .argsort()[:5]
+            ]
+            
+            # Create two rows: 3 charts on top, 2 charts below
+            # Top row with 3 charts
+            top_cols = st.columns(3)
+            
+            # Convert to list to avoid generator issues
+            closest_5_list = closest_5.to_dict('records')
+            
+            for i in range(min(3, len(closest_5_list))):
+                row = closest_5_list[i]
+                country_name = row['country']
+                country_code = get_country_code(country_name)
+                
+                if country_code:
+                    with st.spinner(f"Fetching sector data for {country_name}..."):
+                        sector_data = fetch_country_sector_gdp(country_code)
+                        
+                        if sector_data:
+                            fig = create_comparison_country_pie_chart(country_name, sector_data)
+                            if fig:
+                                with top_cols[i]:
+                                    st.plotly_chart(fig, use_container_width=True)
+                        else:
+                            with top_cols[i]:
+                                st.markdown(f"<div style='text-align:center; color:gray;'>{country_name}<br/>No data</div>", unsafe_allow_html=True)
+                else:
+                    with top_cols[i]:
+                        st.markdown(f"<div style='text-align:center; color:gray;'>{country_name}<br/>No code</div>", unsafe_allow_html=True)
+            
+            # Bottom row with 2 charts (centered)
+            bottom_cols = st.columns([1, 2, 2, 1])  # Creates space, chart, chart, space
+            
+            for i in range(3, min(5, len(closest_5_list))):
+                row = closest_5_list[i]
+                country_name = row['country']
+                country_code = get_country_code(country_name)
+                
+                if country_code:
+                    with st.spinner(f"Fetching sector data for {country_name}..."):
+                        sector_data = fetch_country_sector_gdp(country_code)
+                        
+                        if sector_data:
+                            fig = create_comparison_country_pie_chart(country_name, sector_data)
+                            if fig:
+                                with bottom_cols[i-2]:  # Use columns 1 and 2 (skip the spacer columns)
+                                    st.plotly_chart(fig, use_container_width=True)
+                        else:
+                            with bottom_cols[i-2]:
+                                st.markdown(f"<div style='text-align:center; color:gray;'>{country_name}<br/>No data</div>", unsafe_allow_html=True)
+                else:
+                    with bottom_cols[i-2]:
+                        st.markdown(f"<div style='text-align:center; color:gray;'>{country_name}<br/>No code</div>", unsafe_allow_html=True)
+                        
+        except Exception as e:
+            st.warning(f"Could not fetch comparison country data: {e}")
 
         # --- Demographic Information Section ---
         if india_pop and projected_pop:
