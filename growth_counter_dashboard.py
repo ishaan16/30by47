@@ -5,8 +5,9 @@ import streamlit as st
 
 from utils import (calculate_required_growth, fetch_india_dependency_ratio,
                    fetch_india_median_age, fetch_india_population,
-                   fetch_latest_gdp_growth, get_india_gdp_usd,
-                   project_median_age_evidence_based, project_population)
+                   fetch_india_sector_gdp, fetch_latest_gdp_growth,
+                   get_india_gdp_usd, project_median_age_evidence_based,
+                   project_population)
 
 st.title("Required GDP Growth Calculator")
 
@@ -141,6 +142,121 @@ if current > 0 and target > 0 and time > 0:
                 st.warning(f"Could not read per capita GDP CSV: {e}")
         else:
             st.warning("Could not fetch India's population for per capita GDP calculation.")
+
+        # --- Sector-wise GDP Analysis Section ---
+        st.markdown("---")
+        st.header(":factory: Sector-wise GDP Analysis")
+        
+        # Fetch sector-wise GDP data
+        sector_data = fetch_india_sector_gdp()
+        
+        if sector_data:
+            st.markdown("<br/>", unsafe_allow_html=True)
+            st.subheader(":chart_with_upwards_trend: Current Sector Distribution")
+            st.markdown("<br/>", unsafe_allow_html=True)
+            
+            # Display current sector distribution
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                if 'agriculture' in sector_data:
+                    st.markdown(f"<b>Agriculture ({sector_data['agriculture']['year']}):</b>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div style='font-size:1.5em; font-weight:bold; color:#8B4513;'>{sector_data['agriculture']['percentage']:.1f}%</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown("<b>Agriculture:</b>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div style='font-size:1.5em; font-weight:bold; color:gray;'>N/A</div>",
+                        unsafe_allow_html=True,
+                    )
+            
+            with col2:
+                if 'manufacturing' in sector_data:
+                    st.markdown(f"<b>Manufacturing ({sector_data['manufacturing']['year']}):</b>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div style='font-size:1.5em; font-weight:bold; color:#4169E1;'>{sector_data['manufacturing']['percentage']:.1f}%</div>",
+                        unsafe_allow_html=True,
+                    )
+                elif 'industry' in sector_data:
+                    st.markdown(f"<b>Industry ({sector_data['industry']['year']}):</b>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div style='font-size:1.5em; font-weight:bold; color:#4169E1;'>{sector_data['industry']['percentage']:.1f}%</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown("<b>Manufacturing:</b>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div style='font-size:1.5em; font-weight:bold; color:gray;'>N/A</div>",
+                        unsafe_allow_html=True,
+                    )
+            
+            with col3:
+                if 'services' in sector_data:
+                    st.markdown(f"<b>Services ({sector_data['services']['year']}):</b>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div style='font-size:1.5em; font-weight:bold; color:#32CD32;'>{sector_data['services']['percentage']:.1f}%</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown("<b>Services:</b>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div style='font-size:1.5em; font-weight:bold; color:gray;'>N/A</div>",
+                        unsafe_allow_html=True,
+                    )
+            
+            # Calculate total to ensure it adds up to ~100%
+            total_percentage = sum(sector['percentage'] for sector in sector_data.values())
+            if total_percentage > 0:
+                st.markdown("<br/>", unsafe_allow_html=True)
+                st.markdown(f"<b>Total Sector Share: {total_percentage:.1f}%</b>", unsafe_allow_html=True)
+                
+                if total_percentage < 95 or total_percentage > 105:
+                    st.info("Note: Sector percentages may not sum to 100% due to data availability and methodology differences.")
+            
+            # Sector analysis and insights
+            st.markdown("<br/>", unsafe_allow_html=True)
+            st.subheader(":bulb: Sector Analysis")
+            
+            # Provide insights based on current sector distribution
+            if 'agriculture' in sector_data and 'manufacturing' in sector_data and 'services' in sector_data:
+                agri_share = sector_data['agriculture']['percentage']
+                mfg_share = sector_data['manufacturing']['percentage']
+                services_share = sector_data['services']['percentage']
+                
+                insights = []
+                
+                # Agriculture insights
+                if agri_share > 20:
+                    insights.append("🔸 **High Agriculture Dependence**: India still has a significant agricultural sector, typical of developing economies.")
+                elif agri_share < 10:
+                    insights.append("🔸 **Low Agriculture Share**: India has transitioned to a more industrialized economy.")
+                else:
+                    insights.append("🔸 **Moderate Agriculture**: Balanced agricultural sector typical of emerging economies.")
+                
+                # Manufacturing insights
+                if mfg_share < 15:
+                    insights.append("🔸 **Manufacturing Gap**: Manufacturing share is below the target of 25% for economic development.")
+                elif mfg_share > 25:
+                    insights.append("🔸 **Strong Manufacturing**: Manufacturing sector is well-developed and competitive.")
+                else:
+                    insights.append("🔸 **Growing Manufacturing**: Manufacturing sector shows positive development trends.")
+                
+                # Services insights
+                if services_share > 60:
+                    insights.append("🔸 **Service-Dominated Economy**: Services sector dominates, indicating advanced economic structure.")
+                elif services_share < 40:
+                    insights.append("🔸 **Developing Services**: Services sector has room for growth and modernization.")
+                else:
+                    insights.append("🔸 **Balanced Services**: Services sector shows healthy development.")
+                
+                # Display insights
+                for insight in insights:
+                    st.markdown(f"<div style='font-size:1.1em; margin: 5px 0;'>{insight}</div>", unsafe_allow_html=True)
+        
+        else:
+            st.warning("Could not fetch sector-wise GDP data.")
 
         # --- Demographic Information Section ---
         if india_pop and projected_pop:
