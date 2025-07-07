@@ -2,6 +2,7 @@ from datetime import datetime
 
 import pandas as pd
 import streamlit as st
+import requests
 
 from utils import (calculate_required_growth, fetch_india_dependency_ratio,
                    fetch_india_median_age, fetch_india_population,
@@ -9,7 +10,7 @@ from utils import (calculate_required_growth, fetch_india_dependency_ratio,
                    get_india_gdp_usd, project_median_age_evidence_based,
                    project_population, fetch_sector_growth_projections,
                    get_sector_growth_insights, fetch_country_sector_gdp,
-                   get_country_code)
+                   get_country_code, get_capital_city)
 from plotting_utils import create_sector_sunburst_chart, get_sector_data, create_projected_sector_pie_chart, create_comparison_country_pie_chart
 
 st.title("Required GDP Growth Calculator")
@@ -126,21 +127,14 @@ if current > 0 and target > 0 and time > 0:
                     .abs()
                     .argsort()[:5]
                 ]
-                st.markdown(
-                    f"<br/><b>Countries with current GDP per capita closest to India's projected GDP per capita in {target_year}:</b>",
-                    unsafe_allow_html=True,
-                )
-                st.markdown(
-                    "<ul style='font-size:1.2em;'>"
-                    + "\n".join(
-                        [
-                            f"<li><b>{row['country']}</b>: <span style='font-size:1.3em; color:#ff7f0e;'>$ {row['GDPPerCapita_GDPPerCapitaViaIMF_usd_2025']:,.2f}</span></li>"
-                            for _, row in closest_5.iterrows()
-                        ]
-                    )
-                    + "</ul>",
-                    unsafe_allow_html=True,
-                )
+                country_links = []
+                for _, row in closest_5.iterrows():
+                    country_name = row['country']
+                    city = get_capital_city(country_name)
+                    youtube_url = f"https://www.youtube.com/results?search_query={city.replace(' ', '+')}+city+tour"
+                    link = f"<b><a href='{youtube_url}' target='_blank' style='color:inherit;text-decoration:underline'>{country_name}</a></b>: <span style='font-size:1.3em; color:#ff7f0e;'>$ {row['GDPPerCapita_GDPPerCapitaViaIMF_usd_2025']:,.2f}</span>"
+                    country_links.append(f"<li>{link}</li>")
+                st.markdown("<ul style='font-size:1.2em;'>" + "\n".join(country_links) + "</ul>", unsafe_allow_html=True)
             except Exception as e:
                 st.warning(f"Could not read per capita GDP CSV: {e}")
         else:
@@ -171,80 +165,6 @@ if current > 0 and target > 0 and time > 0:
         else:
             st.warning("Could not fetch sector growth projections.")
         
-        # --- Comparison Countries Section ---
-        st.markdown("<br/>", unsafe_allow_html=True)
-        st.subheader(":globe_with_meridians: International Sector Comparison")
-        
-        # Get the closest 5 countries from the per capita comparison
-        try:
-            df = pd.read_csv("gdp-per-capita-by-country-2025.csv")
-            df = df.dropna(subset=["GDPPerCapita_GDPPerCapitaViaIMF_usd_2025"])
-            df["GDPPerCapita_GDPPerCapitaViaIMF_usd_2025"] = (
-                df["GDPPerCapita_GDPPerCapitaViaIMF_usd_2025"]
-                .replace("[\$,]", "", regex=True)
-                .astype(float)
-            )
-            closest_5 = df.iloc[
-                (df["GDPPerCapita_GDPPerCapitaViaIMF_usd_2025"] - projected_per_capita)
-                .abs()
-                .argsort()[:5]
-            ]
-            
-            # Create two rows: 3 charts on top, 2 charts below
-            # Top row with 3 charts
-            top_cols = st.columns(3)
-            
-            # Convert to list to avoid generator issues
-            closest_5_list = closest_5.to_dict('records')
-            
-            for i in range(min(3, len(closest_5_list))):
-                row = closest_5_list[i]
-                country_name = row['country']
-                country_code = get_country_code(country_name)
-                
-                if country_code:
-                    with st.spinner(f"Fetching sector data for {country_name}..."):
-                        sector_data = fetch_country_sector_gdp(country_code)
-                        
-                        if sector_data:
-                            fig = create_comparison_country_pie_chart(country_name, sector_data)
-                            if fig:
-                                with top_cols[i]:
-                                    st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            with top_cols[i]:
-                                st.markdown(f"<div style='text-align:center; color:gray;'>{country_name}<br/>No data</div>", unsafe_allow_html=True)
-                else:
-                    with top_cols[i]:
-                        st.markdown(f"<div style='text-align:center; color:gray;'>{country_name}<br/>No code</div>", unsafe_allow_html=True)
-            
-            # Bottom row with 2 charts (centered)
-            bottom_cols = st.columns([1, 2, 2, 1])  # Creates space, chart, chart, space
-            
-            for i in range(3, min(5, len(closest_5_list))):
-                row = closest_5_list[i]
-                country_name = row['country']
-                country_code = get_country_code(country_name)
-                
-                if country_code:
-                    with st.spinner(f"Fetching sector data for {country_name}..."):
-                        sector_data = fetch_country_sector_gdp(country_code)
-                        
-                        if sector_data:
-                            fig = create_comparison_country_pie_chart(country_name, sector_data)
-                            if fig:
-                                with bottom_cols[i-2]:  # Use columns 1 and 2 (skip the spacer columns)
-                                    st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            with bottom_cols[i-2]:
-                                st.markdown(f"<div style='text-align:center; color:gray;'>{country_name}<br/>No data</div>", unsafe_allow_html=True)
-                else:
-                    with bottom_cols[i-2]:
-                        st.markdown(f"<div style='text-align:center; color:gray;'>{country_name}<br/>No code</div>", unsafe_allow_html=True)
-                        
-        except Exception as e:
-            st.warning(f"Could not fetch comparison country data: {e}")
-
         # --- Demographic Information Section ---
         if india_pop and projected_pop:
             st.markdown("---")

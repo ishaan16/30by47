@@ -482,4 +482,16 @@ def get_country_code(country_name: str) -> Optional[str]:
         'iceland': 'ISL'
     }
     
-    return country_mapping.get(country_name.lower(), None) 
+    return country_mapping.get(country_name.lower(), None)
+
+
+def get_capital_city(country_name):
+    try:
+        resp = requests.get(f'https://restcountries.com/v3.1/name/{country_name}', timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list) and data and 'capital' in data[0]:
+                return data[0]['capital'][0]
+    except Exception as e:
+        print(f'Error fetching capital for {country_name}: {e}')
+    return country_name  # fallback 
