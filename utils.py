@@ -490,8 +490,19 @@ def get_capital_city(country_name):
         resp = requests.get(f'https://restcountries.com/v3.1/name/{country_name}', timeout=5)
         if resp.status_code == 200:
             data = resp.json()
-            if isinstance(data, list) and data and 'capital' in data[0]:
-                return data[0]['capital'][0]
+            country_code = get_country_code(country_name)
+            # Try to find an exact match for the country name or code
+            for country in data:
+                if (
+                    country.get('name', {}).get('common', '').lower() == country_name.lower()
+                    or country.get('cca3', '').upper() == (country_code or '').upper()
+                ):
+                    if 'capital' in country:
+                        return country['capital'][0]
+            # Fallback: use the first result with a capital
+            for country in data:
+                if 'capital' in country:
+                    return country['capital'][0]
     except Exception as e:
         print(f'Error fetching capital for {country_name}: {e}')
     return country_name  # fallback 
