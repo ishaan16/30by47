@@ -127,6 +127,10 @@ if current > 0 and target > 0 and time > 0:
                     .abs()
                     .argsort()[:5]
                 ]
+                st.markdown(
+                    f"<br/><b>Countries with current GDP per capita closest to India's projected GDP per capita in {target_year}:</b>",
+                    unsafe_allow_html=True,
+                )
                 country_links = []
                 for _, row in closest_5.iterrows():
                     country_name = row['country']
